@@ -13,7 +13,7 @@ clients.  Its design requirements are:
 3. It is relatively easy to transparently migrate existing applications.
 4. It is (computationally) impossible, based on the contents of the
    authentication database, to compute a value that would allow a client
-   to authenticate.
+   to authenticate themselves.
 5. It is (computationally) impossible, for an adversary with full
    control over the authentication server (but not over the client code)
    to recover the user's password.
@@ -46,9 +46,9 @@ The design requirements implicitly assume an adversary model:
 - The adversary has:
   - read access to the authentication database (as in requirement 2), or
   - compromised the authentication server (and **not** the client code),
-	as in requirement 3; for web applications, this means that the
-	static content (esp. the login page and associated scripts) should
-	be served separately from the authentication API.
+    as in requirement 3; for web applications, this means that the
+    static content (esp. the login page and associated scripts) should
+    be served separately from the authentication API.
 - The communication channel between the client and the authentication
   server is confidential and the server end is authenticated.
 
@@ -59,26 +59,49 @@ by an adversary that has compromised the authentication server:
 - it cannot recover the client's password.
 
 
+### Rationale
+
+In the absence of a good Zero-Knowledge Password Proof protocol,
+it seems impossible to have both:
+- the data in the authentication DB is not sufficient for a client
+  to successfully authenticate;
+- an adversary observing the communication with the authentication
+  server may not impersonate the client.
+
+Given that a breaks on the communication channel would likely allow
+to impersonate the user in the scope of the current session, and given
+the frequency of database “leaks” (vs. critical TLS bugs), it seems
+reasonable to prioritize requirement 4.
+
 ### TLS for the authentication server
 
 As stated, the authentication server must use a transport protocol that
 guarantees confidentiality and authenticates the server.
 
 It is not required to implement it using TLS, but in the case of TLS:
-  - forward secrecy (as provided by Ephemeral (EC)DH) SHOULD be provided;
-  - insecure versions of TLS SHOULD be disabled;
-  - the certificate and signing key used by the authentication server
-	SHOULD NOT be used by any other service;
-  - only strong cipher-suites MUST be employed (and accepted);
-  - the client MUST validate the authentication server's certificate;
-	the public key, certificate or matching CA SHOULD be pinned by the client.
+  1. forward secrecy (as provided by Ephemeral (EC)DH) SHOULD be provided;
+  2. insecure versions of TLS SHOULD be disabled;
+  3. the certificate and signing key used by the authentication server
+     SHOULD NOT be used by any other service;
+  4. only strong cipher-suites MUST be employed (and accepted);
+  5. the client MUST validate the authentication server's certificate;
+     the public key, certificate or matching CA SHOULD be pinned by the client.
+
+#### Rationale
+
+- 1. protects clients from a future key compromise.
+- 2. and 3. makes the TLS session harder to attack directly;
+  recent attacks relied on keys being reused on less-well-configured
+  services.
+- 4. is a basic requirement for the communication channel to be secure.
+- 5. is required to prevent trivial Man-in-the-Middle attacks.
 
 
-## Requirements
+## Pre-requisites
 
 - A constant `SERVICE` string, unique to this service.
   - It SHOULD be the URI of the authentication API endpoint,
-	if applicable.
+    if applicable.
   - If not applicable, it SHOULD be a [RFC 4122] random UUID.
 - A set of [hashing scheme]s supported client-side, known to the client,
   including a single *preferred* scheme.
@@ -86,11 +109,27 @@ It is not required to implement it using TLS, but in the case of TLS:
   - a client- and server-side [hashing scheme];
   - a random **salt**, with a least 256b of entropy;
   - a password hash, whose size depends on the server-side
-	hashing scheme.
-
+    hashing scheme.
 
 [RFC 4122]: https://tools.ietf.org/html/rfc4122
 [hashing scheme]: HASH_SCHEME.md
+
+
+### Rationale
+
+- The constant `SERVICE` is used to derive (client-salt) salts from
+  the username; without this per-service constant, it could be possible
+  to batch passwords for the same username, across many services.
+- This constant needs to be unique (per service), which both a URI and
+  a large random UUID achieve.
+- URIs are preferred when possible, since it requires no additional
+  information client-side and clients can have confidence in its
+  uniqueness.
+- The set of supported hashing schemes is used to prevent the server
+  from making the client reveal a hash of the password with weak
+  parameters.
+- Storing the hashing schemes on a per-user basis is required to be able
+  to migrate from one scheme to another.
 
 
 ## Protocol

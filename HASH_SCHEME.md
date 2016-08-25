@@ -47,9 +47,11 @@ hashing schemes, the following are suggested:
 [JSON Schema]: http://json-schema.org/
 
 
-### Recommended schemes — server side
+## Recommended schemes
 
-We recommend a single KDF server-side: `PBKDF2-SHA256`.
+### Server-side — PBKDF2-SHA256
+
+We recommend a single KDF server-side: PBKDF2-SHA256.
 Its single public parameter is the iteration count.
 
 As of 2016, the recommended value is 100 000, which allows approximately
@@ -59,15 +61,57 @@ We recommend doubling that parameter every two years, or multiplying it
 by 1.42 every year, as it is the projected growth in the adversary's
 computational power, according to [Moore's law].
 
+The rationale for using PBKDF2-SHA256 is as follows:
+- it has widespread support in server-side libraries;
+- server-side computations need to be fast, both because of latency
+  requirements for user-facing applications, and because a single server
+  usually needs to handle many users;
+- using non-trivial amounts of memory for a single password hash
+  computation is not feasible: it would use (connection rate)×(memory
+  usage per hash) in steady-state.
+
+
 [Moore's law]: https://en.wikipedia.org/wiki/Moore%27s_law
 
 
-### Recommended schemes — client side
+### Client-side — PBKDF2-SHA256
 
-We recommend three hashing schemes for use client-side:
-- PBKDF2-SHA256, as on the server-side, with the same iteration count.
-- [scrypt] with N=2¹⁴, r=64 and p=1
-- [Argon2] with h=1, m=128MiB, XXXTODO
+The recommended iteration count, client-side, is set to 1 000 000 (one
+million).
+
+PBKDF2-SHA256 is only recommended in legacy applications, where no
+support is available for memory-hard functions.
+
+
+### Client-side — scrypt
+
+[scrypt] was the first memory-hard function used for password hashing,
+designed by Colin Percival.  It has been superseeded by [Argon2], winner
+of the 2015 Password Hashing Competition.
+
+[scrypt] is only recommended in situation where a good [Argon2]
+implementation is not (yet) available.
+
+Based on [Golang's stdlib recommendations](https://godoc.org/golang.org/x/crypto/scrypt)
+and [Colin Percival's feedback](https://github.com/Tarsnap/scrypt/issues/19),
+we recommend the parameters N=2¹⁴, r=64 and p=1.
+
+The rationale is as follows:
+- in general, client-side parallelism cannot be portably expected
+  (JavaScript clients, ...), so `p` is set to 1;
+- `N` was left unchanged compared to the 2009 recommendations: as Colin
+  said, processors didn't get much faster, sequentially speaking;
+- the increased transistor count translated instead to larger memories:
+  we increased `r` to 64 since the transistor count increased 8-fold.
 
 [scrypt]: https://www.tarsnap.com/scrypt.html
+
+
+### Client-side — Argon2
+
+[Argon2] is a memory-hard KDF that won the 2015 Password Hashing
+Competition.  It is the recommended client-side KDF when available.
+
+with h=1, m=128MiB, XXXTODO
+
 [Argon2]: https://password-hashing.net/

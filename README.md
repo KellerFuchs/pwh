@@ -134,45 +134,58 @@ It is not required to implement it using TLS, but in the case of TLS:
 
 ## Protocol
 
-1. The client attempts to authenticate:
-  - The users inputs their username and password.
-  - The client hashes the password, using the preferred scheme,
-	and the salt `SERVICE + '\0' + username`.
-  - The client sends `(username, scheme, client_hash)` to the server.
-2. The server checks the tuple sent from the client:
-   - The following data from the authentication DB:
+### Notations
+
+- `HASH(scheme, key, seed)` designates the hash of `key`
+  under scheme `scheme` and seed `seed`.
+- `SALT(scheme, username)` designates the SHA-256 hash of the binary
+  string `SERVICE + '\0' + scheme + '\0' + username`, using the scheme
+  serialization mechanism chosen by the implementation.
+- `C_HASH(scheme)` is `scheme, HASH(scheme, password, SEED(username, password))`
+- `check(username, scheme, client_hash)` describes the following server
+  procedure:
+  1. Fetch the following data from the authentication DB:
      - the `client_scheme` and `server_scheme` [hashing scheme]s;
      - the `salt` and password `hash`.
-   - If `scheme` and `client_scheme` are not equal, the server returns
-	 `WRONG_SCHEME` along with `client_scheme`.
-   - Otherwise, the server computes the hash of `client_hash`,
-     with seed `seed`, under the scheme `server_scheme`.
-   - If the resulting hash is equal to `hash`, return `OK`, otherwise
-	 return `WRONG_PASSWORD`.  The server SHOULD use a constant-time
-	 comparison function there.
+  2. If `scheme` and `client_scheme` are not equal,
+     return `WRONG_SCHEME` along with `client_scheme`.
+  3. If `HASH(server_scheme, client_hash, seed) == hash`,
+     return `OK`; otherwise, return `WRONG_PASSWORD`.
+     The comparison SHOULD be constant-time.
+
+### Protocol description
+
+1. The client attempts to authenticate:
+  - The users inputs their username and password.
+  - The client sends `(username, C_HASH(scheme))` to the server.
+2. The server returns the value of `check(username, C_HASH(scheme))`.
 3. If the server returned `OK` or `WRONG_PASSWORD`, stop here.
    Otherwise, the client received `WRONG_SCHEME` and `client_scheme`.
    - If `client_scheme` does not belong to the set of supported
      client-side schemes, abort.
-   - Hash the password using the `client_scheme` and the salt
-	 `SERVICE + '\0' + username`, call the result `old_hash`.
-   - Send `(username, scheme, client_hash, client_scheme, old_hash)` to
-	 the server.
+   - Send `(username, C_HASH(scheme), C_HASH(client_scheme))`.
 4. The server performs the following:
-   - If `client_scheme` does not match the value from the authentication
-	 database, abort.
-   - If the hash of `old_hash` under `server_scheme` and `seed` is not
-	 equal to `hash`, return `WRONG_PASSWORD`. The server SHOULD use a
-	 constant-time comparison function there.
-   - At that time, the server MAY update the authentication database,
-	 setting the following:
-	 - `client_scheme` is replaced by scheme;
-	 - `seed` is replaced by a random value, with at least 256b of
-	   entropy;
-	 - `hash` is replaced by the hash of `client_hash` under
-	   `server_scheme` and (the new value of) `seed`.
+   - Return the value of `check(username, C_HASH(client_scheme))`
+   - If it was `OK`, the server MAY update the authentication database,
+     setting the following:
+     - `client_scheme` is replaced by scheme;
+     - `seed` is replaced by a random value, with at least 256b of
+       entropy;
+     - `hash` is replaced by the hash of `client_hash` under
+       `server_scheme` and (the new value of) `seed`.
    - The server SHOULD perform any additional checks that are used for
-	 password changes (such as second factor authentication) *before*
-	 updating the database.
+     password changes (such as second factor authentication) *before*
+     updating the database.
    - The server SHOULD perform all actions associated with a password
-	 change (log, email notification, ...) when updating the database.
+     change (log, email notification, ...) when updating the database.
+
+
+### Rationale
+
+- The preferred hashing scheme is known so as to avoid an extra
+  round-trip to the authentication server (except when migrating to a
+  newer hashing scheme).
+- The server-side implementation is stateless (excluding the auth DB),
+  lending itself to very efficient implementations.
+- The same precautions as for password changes should be taken, because
+  nothing guarantees that the client sent the hash of the same password.

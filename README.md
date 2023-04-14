@@ -17,9 +17,8 @@ clients.  Its design requirements are:
 5. It is (computationally) impossible, for an adversary with full
    control over the authentication server (but not over the client code)
    to recover the user's password.
-6. Batch attacks (trying to recover many passwords at a time) apply
-   neither to the passwords (req 5.), nor to the authentication tokens
-   sent by the client (req. 4).
+6. Batch attacks provide no significant speedups for recovering passwords (req 5.),
+   or impersonate a client (req. 4).
 
 
 This is not:
@@ -44,9 +43,9 @@ The design requirements implicitly assume an adversary model:
   gives them a quadratic speedup on **first preimage** problems
   (finding `p` such that `H(p) = value`).
 - The adversary has:
-  - read access to the authentication database (as in requirement 2), or
+  - read access to the authentication database (as in requirement 4), or
   - compromised the authentication server (and **not** the client code),
-    as in requirement 3; for web applications, this means that the
+    as in requirement 5; for web applications, this means that the
     static content (esp. the login page and associated scripts) should
     be served separately from the authentication API.
 - The communication channel between the client and the authentication
